@@ -1,87 +1,121 @@
 "use-strict";
 
-function addClass(c) {
-	const v = document.getElementsByTagName('video');
-	for(var i=0,l=v.length; i<l; i++) {
-		if(v[i].className.indexOf(c) == -1) v[i].className += ' '+c;
-		console.log("[UltraWide] addClass",v[i],c);
-	}
-}
-function remClass(c) {
-	const v = document.getElementsByTagName('video');
-	for(var i=0,l=v.length; i<l; i++) {
-		v[i].className = v[i].className.replace(c,'');
-		console.log("[UltraWide] remClass",v[i],c);
+function AddClass(InClassName)
+{
+	const VideoElements = document.getElementsByTagName('video');
+	for (var i = 0; i < VideoElements.length; i++)
+	{
+		if (VideoElements[i].className.indexOf(InClassName) == -1)
+		{
+			VideoElements[i].className += ' ' + InClassName;
+		}
+
+		console.log("[UltraWide] AddClass", VideoElements[i], InClassName);
 	}
 }
 
-UltraWide.prototype.update = function() {
-	//Calculate scale factor:
-	const aspect = screen.width / screen.height;
-	if(aspect >= 1.88) { //If wider than 16:9 widescreen:
-		const scale = aspect / 1.77; this.scale = Math.round(scale*100)/100;
-	} else if(this.mode == 3 || this.mode == 4) this.scale = 1.33; //Force Modes
-	else this.scale = 1; //Default
-	
-	//Update Styles:
-	this.styles.innerHTML = ".extraClassAspect { -webkit-transform:scaleX("+this.scale+")!important; }"
-	+".extraClassCrop { -webkit-transform:scale("+this.scale+")!important; }";
-	
-	//Update classes:
-	const fullscreen = document.webkitIsFullScreen;
-	console.log("[UltraWide] Page Update", this.mode, this.scale, fullscreen);
-	switch(this.mode) {
-	case 0: //Disabled
-		remClass('extraClassAspect');
-		remClass('extraClassCrop');
-	break; case 1: //Aspect
-		if(fullscreen && this.scale > 1) {
-			addClass('extraClassAspect');
-		} else {
-			remClass('extraClassCrop');
-			remClass('extraClassAspect');
-		}
-	break; case 2: //Crop
-		if(fullscreen && this.scale > 1) {
-			addClass('extraClassCrop');
-		} else {
-			remClass('extraClassCrop');
-			remClass('extraClassAspect');
-		}
-	break; case 3: //Force Crop
-		addClass('extraClassCrop');
-		remClass('extraClassAspect');
-	break; case 4: //Force Aspect
-		addClass('extraClassAspect');
-		remClass('extraClassCrop');
-	break;
+function RemoveClass(InClassName)
+{
+	const VideoElements = document.getElementsByTagName('video');
+	for (var i = 0; i < VideoElements.length; i++)
+	{
+		VideoElements[i].className = VideoElements[i].className.replace(InClassName, '');
+		console.log("[UltraWide] RemoveClass", VideoElements[i], InClassName);
 	}
 }
 
-function UltraWide() {
-	this.mode = 0;
-	document.addEventListener('webkitfullscreenchange', function(e) {
+UltraWide.prototype.Update = function()
+{
+	const StretchClassName = "ExtraClassStretch";
+	const CropClassName = "ExtraClassCrop";
+	RemoveClass(StretchClassName);
+	RemoveClass(CropClassName);
+	this.CurrentScale = 1;
+
+	if (document.webkitIsFullScreen == false)
+	{
+		return;
+	}
+
+	const AspectRatio = screen.width / screen.height;
+	console.log("[UltraWide] Checking aspect ratio", screen.width, screen.height, AspectRatio);
+	if (AspectRatio > 1.77)
+	{
+		this.CurrentScale = Math.round((AspectRatio / 1.77) * 100) / 100;
+	}
+	
+	this.Styles.innerHTML =
+	"." + StretchClassName + "{ -webkit-transform:scaleX(" + this.CurrentScale + ")!important; }" +
+	"." + CropClassName + "{ -webkit-transform:scale(" + this.CurrentScale + ")!important; }";
+	
+	switch (this.CurrentMode)
+	{
+		case ModeTypes.Disabled:
+		{
+			break; // Do nothing, classes have already been removed
+		}
+		case ModeTypes.Stretch:
+		{
+			if (this.CurrentScale > 1)
+			{
+				AddClass(StretchClassName);
+			}
+			break;
+		}
+		case ModeTypes.Crop:
+		{
+			if (this.CurrentScale > 1)
+			{
+				AddClass(CropClassName);
+			}
+			break;
+		}
+	}
+
+	console.log("[UltraWide] Page Update", this.CurrentMode, this.CurrentScale);
+}
+
+function UltraWide()
+{
+	this.CurrentMode = ModeTypes.Disabled;
+	this.CurrentScale = 1;
+	this.Styles = document.createElement('style');
+	document.body.appendChild(this.Styles);
+
+	document.addEventListener('webkitfullscreenchange', function(e)
+	{
 		this.update();
 	}.bind(this));
-	document.addEventListener('keydown', function(e) {
-		if(e.ctrlKey && e.altKey && e.key == 'c') {
-			if(++this.mode > 2) this.mode = 0;
-			chrome.storage.local.set({'extensionMode':this.mode}, function(){});
+
+	document.addEventListener('keydown', function(e)
+	{
+		if (e.ctrlKey && e.altKey && e.key == 'c')
+		{
+			if (++this.CurrentMode > ModeTypes.Crop)
+			{
+				this.CurrentMode = ModeTypes.Disabled;
+			}
+			chrome.storage.local.set({ ExtensionModeSetting: this.CurrentMode }, function(){});
 		}
 	}.bind(this));
-	this.styles = document.createElement('style');
-	document.body.appendChild(this.styles);
 }
 
-const ultrawide = new UltraWide();
+const UltraWideInstance = new UltraWide();
 
-window.onload = function() {
-	chrome.storage.local.get('extensionMode', function(status) {
-		ultrawide.mode = status.extensionMode;
-		if(status.extensionMode != 0) ultrawide.update();
+window.onload = function()
+{
+	chrome.storage.local.get(ExtensionModeSetting, function(Status)
+	{
+		UltraWideInstance.CurrentMode = Status.ExtensionMode;
+		if (UltraWideInstance.ExtensionMode != ModeTypes.Disabled)
+		{
+			UltraWideInstance.Update();
+		}
 	});
-	chrome.storage.onChanged.addListener(function(changes) {
-		ultrawide.mode = changes.extensionMode.newValue;
-		ultrawide.update();
+
+	chrome.storage.onChanged.addListener(function(Changes)
+	{
+		UltraWideInstance.CurrentMode = Changes.ExtensionMode.newValue;
+		UltraWideInstance.Update();
 	});
 }
